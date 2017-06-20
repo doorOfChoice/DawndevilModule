@@ -1,6 +1,6 @@
 <?php
 
-namespace Frame\Sql;
+namespace Dawndevil\Sql;
 
 /*
 |语法解析
@@ -8,71 +8,187 @@ namespace Frame\Sql;
 */
 
 class Grammer{
+    protected static $need_params = [
+        'where', 'insert', 'update'
+    ];
+
+    protected static function rs_set($sql, $params = []){
+        return [$sql, $params];
+    }
+
     //编译select语法
     public static function compileSelect(Builder $build){
         
         $select = $build->getSelect('select');
-        
+
+        if($select == [])
+            return self::rs_set(''); 
+
         $columns = \implode(',', array_map('static::wrapSelectParam', $select));
         
         $sql = "SELECT {$columns} FROM `{$build->getTable()}` ";
 
-        return $select == [] ? '' : $sql;
+        return self::rs_set($sql);
     }
     //编译order by语法
     public static function compileOrder(Builder $build){
 
         $order = $build->getSelect('order');
+        
+        if($order == [])
+            return self::rs_set('');
+
         $columns = \implode(',', array_map('static::wrapOrderParam', $order));
         
         $sql = "ORDER BY {$columns} ";
 
-        return $order == [] ? '' : $sql;
+        return self::rs_set($sql);
     }
+
     //编译where语法
     public static function compileWhere(Builder $build){
         
         $where = $build->getSelect('where');
+        
+        if($where == [])
+           return self::rs_set('');
+
         $columns = \implode('AND', array_map('static::wrapWhereParam', $where));
 
         $sql = "WHERE {$columns} ";
-        return $where == [] ? '' : $sql;
+
+        return self::rs_set($sql, $build->getArrParams('where', 2));
     }
+
     //编译limit语法
     public static function compileLimit(Builder $build){
         
         $limit = $build->getSelect('limit');
+        
+        if($limit == [])
+           return self::rs_set('');
+
         $columns = \implode(',', $limit);
         
         $sql = "LIMIT {$columns} ";
-        return $limit == [] ? '' : $sql;
+
+        return self::rs_set($sql);
     }
 
     //编译join语法
     public static function compileJoin(Builder $build){
         $join = $build->getSelect('join');
+        
+        if($join == [])
+            return self::rs_set('');
+
         $columns = \implode(' ', array_map('static::wrapJoinParam', $join));
+        
         $sql = $columns;
-        return $columns == [] ? '' : $sql;
+        
+        return self::rs_set($sql);
     }
 
+    //编译Union语句
+    public static function compileUnion(Builder $build){
+        $unions = $build->getSelect('union');
+        
+        if($unions == [])
+            return self::rs_set('');
+
+        $sql = '';
+        $params = [];
+        foreach($unions as $union){
+            list($sq, $param) = 
+            self::sqlGenerator([
+                'select', 'where'
+            ], $union);  
+            $sql .= "UNION {$sq} ";
+            $params = array_merge($params, $param);
+        }
+        return self::rs_set($sql, $params);
+    }
+
+    //编译插入语句
     public static function compileInsert(Builder $build){
         $insert = $build->getInsert();
+        
+        if($insert == [])
+            return self::rs_set('');
+        
         $keys = \implode(',', array_map('static::wrapKeyParam', array_keys($insert)));
         $values = \implode(',', array_fill(0, count($insert), '?'));
+        
         $sql = "INSERT INTO `{$build->getTable()}`({$keys}) VALUES({$values})";
 
-        return $insert == [] ? '' : $sql;
+        return self::rs_set($sql, \array_values($insert));
     }
 
     public static function compileUpdate(Builder $build){
         $update = $build->getUpdate();
+       
+        if($update == [])
+            return self::rs_set('');
+
         $columns = \implode(',', array_map('static::wrapInsertParam', array_keys($update)));
+       
         $sql = "UPDATE `{$build->getTable()}` SET $columns ";
 
-        return $update == [] ? '' : $sql;
+        return self::rs_set($sql, \array_values($update));
     }
 
+    //完整语句生成器
+    public static function sqlGenerator($array = [], Builder $build){
+        $sql = '';
+        $params = [];
+        foreach($array as $value){
+            $method = 'compile' . \ucfirst($value);
+            list($sq, $param) = self::$method($build);
+            $sql .= $sq;
+            $params = array_merge($params, $param);
+        }
+
+        return self::rs_set($sql, $params);
+    }
+
+    //生成查询的完整语句
+    public static function sqlSelect(Builder $build){
+        list($sql, $params) = 
+            self::sqlGenerator(
+                array_keys($build->getSelect()), $build);
+
+        return self::rs_set($sql, $params);
+    }
+
+    //生成插入的完整语句
+    public static function sqlInsert(Builder $build){
+        list($sql, $params) = self::sqlGenerator(
+            ['insert'],
+            $build
+        );
+
+        return self::rs_set($sql, $params);
+    }
+
+    //生成更新的完整语句
+    public static function sqlUpdate(Builder $build){
+        list($sql, $params) = self::sqlGenerator(
+            ['update', 'where'],
+            $build
+        );
+
+        return self::rs_set($sql, $params);
+    }
+
+    //生成删除的完整语句
+    public static function sqlDelete(Builder $build){
+        list($sql, $params) = self::sqlGenerator(
+            ['delete'],
+            $build
+        );
+
+        return self::rs_set($sql, $params);
+    }
     /*
     |将所有表和键加上`符号
     |针对`key`.value, 和 `key` as new, 进行转意

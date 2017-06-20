@@ -1,13 +1,9 @@
 <?php
 
-namespace Frame\Sql;
+namespace Dawndevil\Sql;
 
 class SqlRunner{
     protected $conn;
-
-    protected static $need_params = [
-        'where', 'insert', 'update'
-    ];
 
     public function __construct($setting){
         $port     = $setting['port'];
@@ -19,27 +15,11 @@ class SqlRunner{
         $this->conn = new \PDO("{$driver}:dbname={$database};host={$host};port={$port}", $username, $password);
     }
 
-    protected function updateParam($keyword, $params, Builder $build){
-        if(\in_array($keyword, self::$need_params)){
-            $attr = 'get' . ucfirst($keyword);
-            if($keyword == 'where'){
-                $params = array_merge($params, $build->getArrParams($keyword, 2));
-            }else{
-                $params = array_merge($params, array_values($build->$attr()));
-            }
-        }
-
-        return $params;
-    }    
+    
 
     public function runSelect(Builder $build){
-        $sql = '';
-        $params = [];
-        foreach($build->getSelect() as $key => $value){
-            $method = 'compile' . \ucfirst($key);
-            $sql .= Grammer::$method($build);
-            $params = $this->updateParam($key, $params, $build);
-        }
+        list($sql, $params) = Grammer::sqlSelect($build);
+
         $sth = $this->conn->prepare($sql);
         $sth->execute($params);
         $result = $sth->fetchAll(\PDO::FETCH_CLASS);
@@ -48,26 +28,17 @@ class SqlRunner{
     }
 
     public function runInsert(Builder $build){
-        $sql = Grammer::compileInsert($build);
-        $params = array_values($build->getInsert());
-
+        list($sql, $params) = Grammer::sqlInsert($build);
+        
         $sth = $this->conn->prepare($sql);
         $sth->execute($params);
 
-        var_dump($sql);
 
         return $this->conn->lastInsertId();
     }
 
     public function runUpdate(Builder $build){
-        $sql = '';
-        $params = [];
-
-        $sql .= Grammer::compileUpdate($build);
-        $sql .= Grammer::compileWhere($build);
-
-        $params = $this->updateParam('update', $params, $build);
-        $params = $this->updateParam('where', $params, $build);
+        list($sql, $params) = Grammer::sqlUpdate($build);
 
         $sth = $this->conn->prepare($sql);
         $success = $sth->execute($params);
@@ -76,11 +47,7 @@ class SqlRunner{
     }
 
     public function runDelete(Builder $build){
-        $sql = "DELETE FROM `{$build->getTable()}` ";
-        $params = [];
-        
-        $sql .= Grammer::compileWhere($build);
-        $params = $this->updateParam('where', $params, $build);
+        list($sql, $params) = Grammer::sqlDelete($build);
 
         $sth = $this->conn->prepare($sql);
         $success = $sth->execute($params);

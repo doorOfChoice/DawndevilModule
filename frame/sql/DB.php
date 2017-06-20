@@ -1,9 +1,9 @@
 <?php
 
-namespace Frame\Sql;
+namespace Dawndevil\Sql;
 
 class DB{
-    //Frame\Sql\SqlRunner
+    //Dawndevil\Sql\SqlRunner
     protected static $conn = null;
 
 

@@ -1,13 +1,13 @@
 <?php
 
-namespace Frame\Sql;
+namespace Dawndevil\Sql;
 
 
 class Builder{
     //表名
     protected $table;
 
-    //Frame\Sql\SqlRunner
+    //Dawndevil\Sql\SqlRunner
     protected $conn;
     
     //查询器绑定顺序
@@ -16,15 +16,20 @@ class Builder{
         'join'   => [],
         'where'  => [],
         'order'  => [],
+        'union'  => [],
         'limit'  => []
     ];
 
+    //插入绑定器
     protected $insert = [];
-
+    
+    //更新绑定器
     protected $update = [];
-
+    
+    //删除绑定器
     protected $delete = [];
     
+
 
     public function __construct($table, $conn){
         $this->table   = $table;
@@ -40,11 +45,12 @@ class Builder{
         $new_args = [];
 
         if(count($args) === count($args, 1)){
-            if(count($args) === 2){
-                $new_args = [[$args[0], '=', $args[1]]];
-            }else{
-                throw new \Exception('where params wrong');
+            switch(count($args)){
+                case 2 : $new_args = [[$args[0], '=', $args[1]]]; break;
+                case 3 : $new_args = [[$args[0], $args[1], $args[2]]]; break;
+                default:  throw new \Exception('where params wrong');
             }
+        
         }else{
             foreach($args as $v){
                 switch(count($v)){
@@ -157,13 +163,20 @@ class Builder{
         return $this->join('RIGHT', \is_array($args) ? $args : func_get_args());
     }
 
-    public function insertGetId($args = []){
+    public function insert($args = []){
         if(count($args) != count($args, 1))
             throw new \Exception('insert param is wrong');
         
         $this->insert = $args;
         
         return $this->conn->runInsert($this);
+    }
+
+    public function union(Builder $build){
+        if($build != NULL)
+            $this->select['union'][] = $build;
+        
+        return $this;    
     }
 
     public function update($args = []){
@@ -188,10 +201,12 @@ class Builder{
         return isset($this->select[$key]) ? $this->select[$key] : NULL;
     }
 
+    //获取插入构造器的内容
     public function getInsert(){
         return $this->insert;
     }
 
+    //获取更新构造器的内容
     public function getUpdate(){
         return $this->update;
     }
